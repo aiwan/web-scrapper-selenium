@@ -1,85 +1,141 @@
-# For this home test, you have been provided with a text file containing 10 article titles.
-# Your task is to create a dictionary of each article title with its corresponding PubMed ID.
-# To find the PubMed ID for each article, you need to search for the article title on the PubMed website, which can be accessed via the following URL: “https://pubmed.ncbi.nlm.nih.gov/”.
+"""
+Bioz - Home task - Web scrapper (Selenium)
 
-# To automate this process, you will use the Selenium library.
-# If a specific article cannot be found on the PubMed website, then the corresponding value in the dictionary should be “no results for article title”.
+For this home test, you have been provided with a text file containing 10 article titles.
+Your task is to create a dictionary of each article title with its corresponding PubMed ID.
+To find the PubMed ID for each article, you need to search for the article title on the PubMed website, which can be accessed via the following URL: “https://pubmed.ncbi.nlm.nih.gov/”.
+To automate this process, you will use the Selenium library.
+If a specific article cannot be found on the PubMed website, then the corresponding value in the dictionary should be “no results for article title”.
 
-# Once you have completed the task, please send your Python script and the dictionary in a JSON file format.
+Once you have completed the task, please send:
+ -your Python script and the dictionary in a JSON file format.
+ -In addition, please record and send a short video using https://www.loom.com/ where your describe your thought process,
+  the resources you used, new things you learned, and problems you faced along the way.
 
-# In addition, please record and send a short video using https://www.loom.com/ where your describe your thought process,
-# the resources you used, new things you learned, and problems you faced along the way
+"""
 
 # IMPORTS
-from seleniumwire import webdriver
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.service import Service
+from selenium import webdriver
 from selenium.webdriver.common.by import By
+import json
 import time
 
-def make_request(url):
+# CONSTANTS
+URL = "https://pubmed.ncbi.nlm.nih.gov/"
+TEXT_FILE = "titles.txt"
+
+
+# FUNCTIONS
+def initialize(text_file):
+    '''
+    Initiliaze program by reading titles from files, setting up the webdriver and pmid_dict.
+    :parameter: text_file, text file containing 10 article titles.
+    :return: titles, list of titles
+    :return: driver, webdriver for Chrome
+    :return: pmid_dict, empty dictionary used for pmid numbers
     '''
 
-    :param url:
-    :return:
+    # load the article titles from the text file
+    with open(text_file, 'r') as f:
+        titles = [line.strip() for line in f.readlines()]
+
+    # initialize the web driver in Chrome
+    driver = webdriver.Chrome()
+
+    # create an empty dictionary to store the PubMed IDs
+    pmid_dict = {}
+
+    return titles, driver, pmid_dict
+
+
+def parse_titles(titles, driver, pmid_dict):
     '''
-    try:
-        response = requests.get(url)
-        # If the response was successful, no Exception will be raised
-        response.raise_for_status()
-        return response
-    except HTTPError as http_err:
-        print(f'HTTP error occurred: {http_err}')
-    except Exception as err:
-        print(f'Other error occurred: {err}')
-    else:
-        print('Success!')
+    Parse titles by navigating into the URL and searching for the PMID number.
+    :parameter: titles, list of titles
+    :parameter: driver, webdriver for Chrome
+    :parameter: pmid_dict, empty dictionary used for pmid numbers
+    :return: pmid_dict, dictionary filled with key-value: title:pmid
+    '''
+
+    # loop through each article title and search for its PubMed ID
+    for article_title in titles:
+        # start parsing
+        print("Parsing title: " + article_title)
+
+        # navigate to the PubMed website
+        driver.get(URL)
+
+        # find the search box and enter the article title
+        search_box = driver.find_element(By.ID, 'id_term')
+        search_box.send_keys(article_title)
+
+        time.sleep(2)
+
+        # find the search button and click it
+        search_button = driver.find_element(By.CLASS_NAME, "search-btn")
+        search_button.click()
+
+        # check if the search returns any results
+        # no results
+        if 'No results were found' in driver.page_source:
+            pmid_dict[article_title] = str('no results for "' + article_title + '"')
+        # entered directly into the article page
+        elif 'article-page' in driver.page_source:
+            pmid = driver.find_element(By.CSS_SELECTOR, 'strong[title="PubMed ID"]').text
+            pmid_dict[article_title] = pmid
+        # search results
+        elif 'search-results' in driver.page_source:
+            # find the link to the first article and extract its PubMed ID
+            pmid = driver.find_element(By.XPATH, "//article[1]//span[@class='docsum-pmid']").text
+            real_article_title = driver.find_element(By.XPATH, "//article[1]//a[@class='docsum-title']").text
+            pmid_dict[real_article_title] = pmid
+        # unknown page
+        else:
+            pmid_dict[article_title] = str('no results for "' + article_title + '"')
+
+    # close the web driver
+    driver.quit()
+
+    return pmid_dict
+
+
+def save_to_json(json_file, pmid_dict):
+    '''
+    Saves pmid_dict to a JSON file with the name given: json_file
+    :parameter: json_file, file name for the json_file
+    :parameter: pmid_dict, dictionary with key-value: titles:pmid
+    :return: no return
+    '''
+    # save the dictionary to a JSON file
+    print("Saving to " + json_file)
+    with open(json_file, 'w') as f:
+        json.dump(pmid_dict, f, indent=4)
 
 
 def main():
     '''
     Main function, controls the general logic.
-    :return:
+    Receives a text file containing 10 article titles and generates a JSON file with a dictionary containing the
+    PMID number.
+    :return: no return
     '''
-    print(f'Started main')
+    # start message
+    print("Started execution")
 
-    base_url = "https://pubmed.ncbi.nlm.nih.gov/"
-    title_searched = "Men's Feminist Identification and Reported Use of Prescription Erectile Dysfunction Medication"
+    # initializations
+    titles, driver, pmid_dict = initialize(TEXT_FILE)
 
-    # Selenium
-    driver = webdriver.Chrome()
-    driver.get(base_url)
+    # parse titles in the URL
+    pmid_dict = parse_titles(titles, driver, pmid_dict)
 
-    # sleep for 2 sec
-    #time.sleep(2)
+    # save pmid_dict to json
+    save_to_json('pmid_dict.json', pmid_dict)
 
-    # Search 'search bar' inside the site
-    search_input = driver.find_element(By.ID, 'id_term')
-    search_input.send_keys(title_searched)
+    # End message
+    print("Finished execution")
 
-    # sleep for 1 sec
     time.sleep(1)
-
-    # Click on 'search'
-    #search_button = driver.find_element(By.CSS_SELECTOR, 'input[type="submit"]')
-    search_button = driver.find_element(By.CLASS_NAME, "search-btn")
-    search_button.click()
-
-    # Sleep for 2 sec
-    time.sleep(2)
-
-    # Search for PMID of the first result
-    #first_article = driver.find_element(By.TAG_NAME, "article")
-    pmid = driver.find_element(By.XPATH, "//article[1]//span[@class='docsum-pmid']").text
-    print(f"pmid = {pmid}")
-
-    # Sleep for 5 sec
-    time.sleep(5)
-
-    # Close window
-    driver.quit()
 
 
 if __name__ == '__main__':
     main()
-
